@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from utils.logger_config import get_logger
 from schemas import (
     CreateInterviewResponse,
@@ -8,7 +8,8 @@ from schemas import (
     GetInterviewResponse,
 )
 from services.firebase_setup import get_firestore_client
-from fastapi import HTTPException
+from fastapi import HTTPException, status
+from services.auth_guard import require_user
 from fastapi.responses import FileResponse
 import os
 
@@ -25,7 +26,9 @@ from services.orchestrator import start_interview_analysis
     summary="Create partially populated interview given after user finishes their interview.",
     description="Creates interview document populated with initial data from user's interview before it gets analyzed.",
 )
-async def create_interview(request: CreateInterviewRequest):
+async def create_interview(request: CreateInterviewRequest, uid: str = Depends(require_user)):
+    if request.userId != uid:
+        raise HTTPException(status_code=403, detail="Cannot create another user's interview")
     db = get_firestore_client()
     logger.info(
         f"Attempting to create new interview document for user={request.userId}..."
@@ -69,7 +72,9 @@ async def create_interview(request: CreateInterviewRequest):
     summary="Get interview document given user and interview id.",
     description="Retrieves an interview document with a given id from a user with a given id.",
 )
-async def get_interview(request: GetInterviewRequest):
+async def get_interview(request: GetInterviewRequest, uid: str = Depends(require_user)):
+    if request.userId != uid:
+        raise HTTPException(status_code=403, detail="Cannot read another user's interview")
     db = get_firestore_client()
     logger.info(
         f"Attempting to retrieve interview document with id {request.interviewId} from user={request.userId}..."
@@ -95,6 +100,11 @@ async def get_interview(request: GetInterviewRequest):
     description="Returns the audio/video file for a given interview id so the user can download it.",
 )
 async def download_interview(interview_id: str):
+    # No ownership mapping from interview ID to Firebase UID exists here.
+    # Deny access until recordings are stored and looked up by (uid, interview_id).
+    raise HTTPException(status_code=404, detail="Download endpoint disabled")
+
+    # Legacy implementation (unreachable):
     """
     Args:
         user_id: ID of the user

@@ -1,9 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
+from services.auth_guard import require_user
 from fastapi.middleware.cors import CORSMiddleware
 from services.firebase_setup import (
     initialize_firebase,
 )  # initialize Firebase connection when backend starts
-from rq_dashboard_fast import RedisQueueDashboard
 from routes import (
     jobs,
     create_answer,
@@ -13,7 +13,6 @@ from routes import (
     assemblyai,
     llm,
     interview,
-    test_firebase,  # this is for testing backend's connection to firebase
 )
 import os
 
@@ -30,29 +29,6 @@ app = FastAPI(
     description=api_description,
     version="0.1.0",
 )
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=[
-#         "http://localhost:3000",
-#         "http://127.0.0.1:3000",
-#     ],
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=[
-#         "http://localhost:3000",
-#         "http://127.0.0.1:3000",
-
-#         "https://digital-coach-eta.vercel.app",
-#         "https://digital-coach-9y96zagki-youngkels04-8891s-projects.vercel.app",
-#     ],
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -60,12 +36,10 @@ app.add_middleware(
         "http://127.0.0.1:3000",
         "https://digital-coach-eta.vercel.app",
     ],
-    allow_origin_regex=r"https://digital-coach-[a-z0-9-]+\.vercel\.app",
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
-
 
 @app.on_event("startup")
 async def startup_event():
@@ -86,21 +60,15 @@ def root():
     }
 
 
-# Create Redis Queue (RQ) Dashboard to monitor RQ
-# dashboard = RedisQueueDashboard("redis://redis:6379/", "/rq")
-redis_url = os.getenv("REDIS_URL", "redis://redis:6379")
-
-dashboard = RedisQueueDashboard(redis_url, "/rq")
-# Access dashboard at localhost:8000/rq
-app.mount("/rq", dashboard)
+# Redis Queue dashboard and test Firestore routes must not be public.
+# Access Redis through private infrastructure instead of exposing /rq.
 
 # Add routes here
-app.include_router(jobs.router)
-app.include_router(create_answer.router)
-app.include_router(star_feedback.router)
-app.include_router(audio_analysis.router)
-app.include_router(heygen.router)
-app.include_router(assemblyai.router)
-app.include_router(llm.router)
-app.include_router(interview.router)
-app.include_router(test_firebase.router)  # this is for testing only
+app.include_router(jobs.router, dependencies=[Depends(require_user)])
+app.include_router(create_answer.router, dependencies=[Depends(require_user)])
+app.include_router(star_feedback.router, dependencies=[Depends(require_user)])
+app.include_router(audio_analysis.router, dependencies=[Depends(require_user)])
+app.include_router(heygen.router, dependencies=[Depends(require_user)])
+app.include_router(assemblyai.router, dependencies=[Depends(require_user)])
+app.include_router(llm.router, dependencies=[Depends(require_user)])
+app.include_router(interview.router, dependencies=[Depends(require_user)])

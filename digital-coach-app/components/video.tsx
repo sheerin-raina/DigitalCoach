@@ -1,3 +1,4 @@
+import { apiFetch } from "@App/lib/auth/apiFetch";
 import React, { useRef, useState, useEffect } from "react";
 // import styles from "@App/styles/NaturalConversationPage.module.scss";
 import { Video, VideoOff, Mic, MicOff } from "lucide-react";
@@ -228,7 +229,7 @@ if (!host) {
         setVideoURL("");
 
         // get temporary AssemblyAI authentication token from our backend
-        const response = await fetch(
+        const response = await apiFetch(
             `${host}/api/assemblyai/token`,
             {
                 method: "GET",

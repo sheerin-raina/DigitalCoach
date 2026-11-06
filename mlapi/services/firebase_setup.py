@@ -48,11 +48,22 @@ def initialize_firebase():
         cred = credentials.Certificate(service_account_path)
 
         return firebase_admin.initialize_app(cred, options={"projectId": projectId})
+    
+    # Local Firebase emulator
+    if os.getenv("FIRESTORE_EMULATOR_HOST"):
+        logger.info("Using local Firebase emulator")
 
-    # Last resort (Google default credentials)
+        return firebase_admin.initialize_app(
+            credentials.ApplicationDefault(),
+            options={"projectId": projectId}
+        )
+
+    # Production fallback, Last resort (Google default credentials)
     logger.warning("No Firebase credentials found. Attempting default credentials.")
 
-    return firebase_admin.initialize_app()
+    return firebase_admin.initialize_app(
+        options={"projectId": projectId}
+    )
 
 
 def get_firestore_client():

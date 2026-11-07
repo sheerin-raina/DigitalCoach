@@ -80,7 +80,7 @@ async def start_interview(configs: HeyGenSessionRequest):
 
         # print(response.text)
         session_token = response.json()["data"]["session_token"] 
-        print(f"\nSession token: {session_token}")
+
     except KeyError as e:
         logger.error(f"Can't start HeyGen session: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error starting HeyGen session: {str(e)}")
@@ -184,7 +184,7 @@ async def get_session_token():
 
         # print(response.text)
         session_token = response.json()["data"]["session_token"] 
-        print(f"\nSession token: {session_token}")
+
         return session_token
     except KeyError as e:
         logger.error(f"Can't start HeyGen session: {str(e)}")

@@ -1,3 +1,4 @@
+import { apiFetch } from "@App/lib/auth/apiFetch";
 import type { NextPage } from "next";
 import { useState, useEffect } from "react";
 import { useAuth } from "@App/lib/auth/AuthContextProvider";
@@ -84,7 +85,7 @@ if (!host) {
   throw new Error("NEXT_PUBLIC_HOST is not configured");
 }
 
-const response = await fetch(`${host}/api/heygen/session_token`);
+const response = await apiFetch(`${host}/api/heygen/session_token`);
 
       const token = await response.json();
 

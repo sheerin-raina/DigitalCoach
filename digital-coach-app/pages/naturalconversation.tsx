@@ -1,3 +1,4 @@
+import { apiFetch } from "@App/lib/auth/apiFetch";
 import { useState, useEffect } from "react";
 import AuthGuard from "@App/lib/auth/AuthGuard";
 import { v4 as uuidv4 } from "uuid";
@@ -76,7 +77,7 @@ const handleStartInterview = async () => {
 
     console.log(`Using ${host} for the host.`);
 
-    const response = await fetch(
+    const response = await apiFetch(
       `${host}/api/heygen/session_token`,
       {
         method: "GET",
@@ -121,7 +122,7 @@ const waitForAnalysis = async (
   const start = Date.now();
 
   while (Date.now() - start < timeout) {
-    const response = await fetch(
+    const response = await apiFetch(
       `${host}/api/jobs/results/${jobId}`
     );
 
@@ -205,7 +206,7 @@ const handleStopInterview = async (
     console.log(`Using ${host} for the host.`);
     console.log("Submitting Interview Session...");
 
-    const response = await fetch(
+    const response = await apiFetch(
       `${host}/api/interview`,
       {
         method: "POST",

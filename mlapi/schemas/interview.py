@@ -2,14 +2,14 @@
 Interview-related schemas
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class CompetencyMetric(BaseModel):
     """
     Model that represents a competency metric such as clarity, engagement, or confidence
     """
-    score: int # user's score in this metric
+    score: float | None = Field(..., ge=0, le=10, allow_inf_nan=False) # 0–10; null when unavailable
     summary: str # ai-generated feedback about the user's competency in regards to this metric 
     
 
@@ -31,23 +31,33 @@ class Feedback(BaseModel):
     """
     ai_feedback: str
     overall_competency: OverallCompetency 
-    sentiment: str
+    sentiment: str | None = None # optional legacy field; analysis is stored on Interview
 
 class Metrics(BaseModel):
     """
     Metrics based on user's performance during the interview, e.g. how many filler words were detected
     """
-    filler_count: int # how many filler words were used
-    overall_score: int # overall interview performance score
-    wpm: int # user's words per minute (pacing)
+    filler_count: int | None = Field(..., ge=0) # null when unavailable
+    overall_score: float | None = Field(..., ge=0, le=100, allow_inf_nan=False) # 0–100; no weighting implied
+    wpm: float | None = Field(..., ge=0, allow_inf_nan=False) # requires candidate speaking time
 
 class SentimentPercents(BaseModel):
     """
     Model representing the shape of the overall sentiment analysis percentages.
     """
-    positive: int # percentage of the responses that were positive sentiment
-    negative: int # percentage of the responses that were negative sentiment
-    neutral: int  # percentage of the responses that were neutral sentiment
+    positive: float = Field(ge=0, le=100, allow_inf_nan=False) # percentage of the responses that were positive sentiment
+    negative: float = Field(ge=0, le=100, allow_inf_nan=False) # percentage of the responses that were negative sentiment
+    neutral: float = Field(ge=0, le=100, allow_inf_nan=False) # percentage of the responses that were neutral sentiment
+
+class InterviewReport(BaseModel):
+    """Validated analysis update; all report fields must be supplied.
+
+    Null scores represent missing evidence, never zero performance. Overall
+    score normalization and weighting are the report generator's responsibility.
+    """
+    feedback: Feedback
+    metrics: Metrics
+
 
 class Interview(BaseModel): 
     """

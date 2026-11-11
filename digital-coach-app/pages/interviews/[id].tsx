@@ -1,6 +1,9 @@
 import { useRouter } from "next/router";
 import { useState, useEffect } from "react";
 import styles from "@App/styles/interview/Results.module.scss";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@App/lib/firebase/firebase.config";
+import { useAuth } from "@App/lib/auth/AuthContextProvider";
 import { IInterview } from "@App/lib/interview/models"
 import { Calendar, Clock, Star, BookOpenText, Crown, Heart, CirclePlus } from "lucide-react";
 
@@ -11,63 +14,36 @@ import { Calendar, Clock, Star, BookOpenText, Crown, Heart, CirclePlus } from "l
 export default function InterviewResults() {
     const router = useRouter();
     const [interview, setInterview] = useState<IInterview>();
-    // THIS DATA IS TEMPORARY UNTIL WE IMPLEMENT THE FUNCTION TO READ THE INTERVIEWS FROM FIREBASE
-    const mockData = {
-        "id": "vsoSA7V72JFdBPMLJL29",
-        "date": "03/04/2024",
-        "timeStarted": "20:30",
-        "duration": "5m 30s",
-        "feedback": {
-            ai_feedback: "Your enthusiasm was evident, and you established a great rapport early on. You used the STAR method effectively for behavioral questions, but your technical answers were slightly vague. Next time, focus more on specific metrics to quantify your past achievements, and try to pause briefly before answering complex questions to gather your thoughts.",
-            overall_competency: {
-                clarity: {
-                    score: 8,
-                    summary: "Excellent pacing at 150 WPM; your delivery was very clear and easy to follow.",
-                },
-                confidence: {
-                    score: 10,
-                    summary: "You had approximately 10 filler words or hedge phrases per minute, but you projected strong confidence throughout your interview!",
-                },
-                engagement: {
-                    score: 9,
-                    summary: "Great job varying your tone with 98% of your responses being expressive! You used 10 high-value keywords effectively in your responses.",
-                },
-                star: {
-                    score: 88,
-                    summary: "To elevate your solid foundation, focus on quantifying your 'Result' with concrete metrics and explicitly highlighting your individual contributions rather than just the team's effort during the 'Action' phase."
-                }
-            }
-        },
-        "metrics": {
-            "filler_count": 2,
-            "overall_score": 99,
-            "wpm": 100,
+    const { user, loading: authLoading } = useAuth();
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
 
-        },
-        "transcript": [],
-        "url": "google.com",
-        sentiment: undefined,
-    }
-    
     useEffect(() => {
-        setInterview(mockData);
-        alert("We haven't implemented the logic needed to retrieve interview data from the backend. Thus, the data seen here is mock data and doesn't reflect the actual interview's data.")
-    }, []);
+        if (!router.isReady || authLoading) return;
+        let cancelled = false;
+        const loadInterview = async () => {
+            setLoading(true);
+            setError("");
+            setInterview(undefined);
+            try {
+                if (!user) throw new Error("Please sign in to view your interview.");
+                const id = router.query.id;
+                if (typeof id !== "string") throw new Error("Invalid interview ID.");
+                const snapshot = await getDoc(doc(db, "users", user.uid, "interviews", id));
+                if (!snapshot.exists()) throw new Error("Interview not found.");
+                if (!cancelled) setInterview({ ...snapshot.data(), id: snapshot.id } as IInterview);
+            } catch (err) {
+                if (!cancelled) setError(err instanceof Error ? err.message : "Unable to load interview.");
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        };
+        void loadInterview();
+        return () => { cancelled = true; };
+    }, [router.isReady, router.query.id, user, authLoading]);
 
-    /**
-     * Gets the interview document using its id from the URL.
-     */
-    const getInterview = async () => {
-
-    }
-
-    /**
-     * Converts an interview's duration HH:MM into HHh and MMm
-     * @param duration 
-     */
-    const formatDuration = (duration: string) => {
-
-    }
+    if (loading) return <p role="status">Loading interview...</p>;
+    if (error) return <p role="alert">{error}</p>;
 
     return (
         <div className={styles.performanceResults}>
@@ -77,7 +53,7 @@ export default function InterviewResults() {
                     <h1>Interview Performance</h1>
                     <div className={styles.scoreDisplay}>
                         <div className={styles.scoreValue}>
-                            {interview?.metrics?.overall_score}
+                            {interview?.metrics?.overall_score ?? "Not available"}
                         </div>
                         <p className={styles.scoreLabel}>Overall Score</p>
                     </div>
@@ -109,10 +85,10 @@ export default function InterviewResults() {
 
                         <div className={styles.scoreBadge}>
                             <span className={styles.scoreText}>
-                                {interview?.feedback?.overall_competency.star.score}
+                                {interview?.feedback?.overall_competency?.star?.score ?? "Not available"}
                             </span>
                         </div>
-                        <p className={styles.feedbackText}>{interview?.feedback?.overall_competency.star.summary}</p>
+                        <p className={styles.feedbackText}>{interview?.feedback?.overall_competency?.star?.summary ?? "Feedback has not been generated."}</p>
                     </div>
 
                     {/* Pacing Score */}
@@ -129,11 +105,11 @@ export default function InterviewResults() {
 
                         <div className={styles.scoreBadge}>
                             <span className={styles.scoreText}>
-                                {interview?.feedback?.overall_competency.clarity.score}
+                                {interview?.feedback?.overall_competency?.clarity?.score ?? "Not available"}
                             </span>
                         </div>
                         <p className={styles.feedbackText}>
-                            {interview?.feedback?.overall_competency.clarity.summary}
+                            {interview?.feedback?.overall_competency?.clarity?.summary ?? "Feedback has not been generated."}
                         </p>
                     </div>
 
@@ -149,11 +125,11 @@ export default function InterviewResults() {
                             </div>
                         </div>
                         <div className={styles.scoreBadge}>
-                            <div className={styles.scoreText}>{interview?.feedback?.overall_competency.confidence.score}    
+                            <div className={styles.scoreText}>{interview?.feedback?.overall_competency?.confidence?.score ?? "Not available"}
                             </div>
                         </div>
                         <p className={styles.feedbackText}>
-                            {interview?.feedback?.overall_competency.confidence.summary}
+                            {interview?.feedback?.overall_competency?.confidence?.summary ?? "Feedback has not been generated."}
                         </p>
                     </div>
 
@@ -170,16 +146,22 @@ export default function InterviewResults() {
                         </div>
                         <div className={styles.scoreBadge}>
                             <div className={styles.scoreText}>
-                                {interview?.feedback?.overall_competency.engagement.score}
+                                {interview?.feedback?.overall_competency?.engagement?.score ?? "Not available"}
                             </div>
                         </div>
                         <p className={styles.feedbackText}>
-                            {interview?.feedback?.overall_competency.engagement.summary}
+                            {interview?.feedback?.overall_competency?.engagement?.summary ?? "Feedback has not been generated."}
                         </p>
                     </div>
                 </div>
 
-                {/* Transcript */}
+                <section>
+                    <h2>Transcript</h2>
+                    <p style={{ whiteSpace: "pre-wrap" }}>{Array.isArray(interview?.transcript) ? interview.transcript.join("\n") : interview?.transcript || "No transcript was recorded."}</p>
+                    <h2>Sentiment analysis</h2>
+                    <p>{interview?.sentiment ? "Analysis saved." : "Analysis is pending or could not be completed."}</p>
+                    {interview?.sentiment && <pre style={{ whiteSpace: "pre-wrap" }}>{typeof interview.sentiment === "string" ? interview.sentiment : JSON.stringify(interview.sentiment, null, 2)}</pre>}
+                </section>
 
                 {/* Action Buttons */}
                 <div className={styles.actionButtons}>

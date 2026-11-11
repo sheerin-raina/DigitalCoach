@@ -10,7 +10,16 @@ from data.interviews import getTranscriptById
 from services.firebase_setup import get_firestore_client
 from tasks.prompts import SENTIMENT_ANALYSIS_PROMPT
 import json
+import re
 logger = get_logger(__name__)
+
+def parse_sentiment_response(content: str) -> SentimentAnalysisResult:
+    """Accept raw JSON or a single Markdown-fenced JSON response."""
+    content = content.strip()
+    fenced = re.fullmatch(r"```(?:json)?\s*\n?(.*?)\n?```", content, re.DOTALL | re.IGNORECASE)
+    if fenced:
+        content = fenced.group(1).strip()
+    return SentimentAnalysisResult.model_validate_json(content)
 
 load_dotenv() # load environment variables
 async def detect_audio_sentiment(user_id: str, interview_id: str) -> SentimentAnalysisResult:
@@ -35,6 +44,11 @@ async def detect_audio_sentiment(user_id: str, interview_id: str) -> SentimentAn
 
     # get interview's transcript
     transcript = await getTranscriptById(user_id, interview_id)
+    if isinstance(transcript, list):
+        transcript = "\n".join(transcript)
+    transcript = (transcript or "").replace("\\n", "\n").strip()
+    if not transcript:
+        raise ValueError("The interview was saved without a transcript to analyze.")
 
     # initialize messages for LLM 
     # system messages provide additional context to the LLM
@@ -59,7 +73,7 @@ async def detect_audio_sentiment(user_id: str, interview_id: str) -> SentimentAn
         logger.error(f"Error communicating with LLM: {e}")
         logger.error(f"Sentiment analysis for interview={interview_id} failed.")
         # return SentimentAnalysisResult(error=f"Error communicating with LLM: {e}")
-        raise BaseException(e) # to make sure the RQ job returns a failed status, we must raise an exception
+        raise
     
     db = get_firestore_client()
     # parse and return LLM response
@@ -69,7 +83,9 @@ async def detect_audio_sentiment(user_id: str, interview_id: str) -> SentimentAn
         llm_response = response.choices[0].message.content # extract LLM's JSON response string
         
         # verify LLM JSON response is the correct shape 
-        validated_data = SentimentAnalysisResult.model_validate_json(llm_response) # parses JSON, checks if it fits our response schema and instantiates our schema if successful 
+        if not llm_response:
+            raise ValueError("The model returned an empty analysis response.")
+        validated_data = parse_sentiment_response(llm_response)
         logger.info(f"Sentiment Analysis on interview={interview_id} successful!")
 
         # add sentiment analysis to user's interview as a JSON string to be parsed later and converted into an overall sentiment
@@ -81,4 +97,4 @@ async def detect_audio_sentiment(user_id: str, interview_id: str) -> SentimentAn
     except ValidationError as e:
         logger.error(f"LLM sentiment analysis on interview={interview_id} is in invalid shape. Reason: {e}")
         # return SentimentAnalysisResult(error=f"LLM sentiment analysis on interview={interview_id} is in invalid shape. Reason: {e}")
-        raise ValidationError(f"LLM sentiment analysis on interview={interview_id} is in invalid shape. Reason: {e}") # to make sure the RQ job returns a failed status, we must raise an exception
+        raise

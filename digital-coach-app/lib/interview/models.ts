@@ -1,64 +1,47 @@
-import { DocumentReference, Timestamp } from "firebase/firestore";
-
-/**
- * Interface for AI-generated feedback which provides overall feedback, clarity of responses, confidence in the responses, and how engaging the responses were. 
- * (Note: This should match the Feedback Pydantic model in /mlapi/schemas/interview.py)
+/** Matches mlapi/schemas/interview.py. Backend Pydantic models validate ranges;
+ * TypeScript interfaces describe data but do not validate Firestore at runtime.
  */
+export interface ICompetencyMetric {
+  score: number | null; // 0–10; null means unavailable
+  summary: string;
+}
+
 export interface IFeedback {
-  ai_feedback: string,
+  ai_feedback: string;
   overall_competency: {
-    clarity: {
-      score: number,
-      summary: string,
-    },
-    confidence: {
-      score: number,
-      summary: string,
-    },
-    engagement: {
-      score: number,
-      summary: string,
-    },
-    star: {
-      score: number,
-      summary: string,
-    }
-  },
+    clarity: ICompetencyMetric;
+    confidence: ICompetencyMetric;
+    engagement: ICompetencyMetric;
+    star: ICompetencyMetric;
+  };
+  sentiment?: string | null; // optional legacy field
 }
 
-/**
- * Interface for all performance metrics computed from an interview.
- * 
- * (Note: This should match the Metrics Pydantic model in /mlapi/schemas/interview.py)
- */
 export interface IMetrics {
-  filler_count: number,
-  overall_score: number,
-  wpm: number,
+  filler_count: number | null; // nonnegative integer
+  overall_score: number | null; // 0–100; null if not computable
+  wpm: number | null; // nonnegative; requires candidate speaking time
 }
 
-/**
- *  Interface of the overall sentiment analysis percentages.
- */
+export interface IInterviewReport {
+  feedback: IFeedback;
+  metrics: IMetrics;
+}
+
 export interface ISentiments {
-    positive: Number // percentage of the responses that were positive sentiment
-    negative: Number // percentage of the responses that were negative sentiment
-    neutral:  Number  // percentage of the responses that were neutral sentiment
+  positive: number; // percentage, 0–100
+  negative: number;
+  neutral: number;
 }
 
-/**
- * Interview for how an interview is stored in the database.
- * 
- * (Note: This should match the Interview Pydantic model in /mlapi/schemas/interview.py)
- */
 export interface IInterview {
-  id: string,
-  date: string, // MM/DD/YYYY
-  timeStarted: string  // HH:MM 12-hour
-  duration: string, // MMm SSs, e.g. 10m 43s not 0-padded
-  feedback: IFeedback | undefined,
-  metrics: IMetrics | undefined,
-  transcript: string[] | string, // transcript may either be an array of dialogues from avatar and user or a single long string
-  sentiment: string | ISentiments | undefined, // sentiment analysis (this is used to store the initial analysis and then be replaced with the sentiment percentages later)
-  url: string | undefined,
+  id: string;
+  date: string; // MM/DD/YYYY
+  timeStarted: string;
+  duration: string; // e.g. 10m 43s; total interview time, not candidate speaking time
+  feedback?: IFeedback | null;
+  metrics?: IMetrics | null;
+  transcript?: string[] | string | null;
+  sentiment?: string | ISentiments | null;
+  url?: string | null;
 }

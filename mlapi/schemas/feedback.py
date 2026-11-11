@@ -11,7 +11,7 @@ class CompetencyFeedback(BaseModel):
     Feedback for a specific competency
     """
 
-    score: float # Overall score
+    score: float | None = Field(..., ge=0, le=10, allow_inf_nan=False) # unavailable without evidence
     evaluation: str # States whether or not the user was compotent in some field 
 
 class OverallCompetencyFeedback(BaseModel):
@@ -22,7 +22,7 @@ class OverallCompetencyFeedback(BaseModel):
     communication_clarity: CompetencyFeedback  # Evaluation on communication clarity
     confidence: CompetencyFeedback # Evaluation on confidence
     engagement: CompetencyFeedback # Evaluation on engagement
-    overall_score: float # Overall score
+    overall_score: float | None = Field(..., ge=0, le=30, allow_inf_nan=False) # legacy sum, not normalized report score
     summary: str # Summary of overall performance including evaluations for individual competencies
 
 

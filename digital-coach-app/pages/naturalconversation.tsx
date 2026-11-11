@@ -41,7 +41,7 @@ const formatTimestamp = () =>
     minute: "2-digit",
     second: "2-digit",
     hour12: false,
-    });
+  });
 
 export default function NaturalConversationPage() {
   const [audioEnabled, setAudioEnabled] = useState(true);
@@ -52,221 +52,228 @@ export default function NaturalConversationPage() {
   const { user } = useAuth();
   const router = useRouter();
 
-    const [fullTranscript, setFullTranscript] = useState(""); // transcript of the entire interview 
-    const [isLoading, setIsLoading] = useState(false);
-    const [loadingMessage, setLoadingMessage] = useState("");
-  
-const handleStartInterview = async () => {
-  if (heygenToken?.length > 0) {
-    console.log("Using existing HeyGen token");
-    setShouldStartAvatar(true);
-    return;
-  }
+  const [fullTranscript, setFullTranscript] = useState(""); // transcript of the entire interview
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
 
-  console.log("Requesting Interview Session...");
-  setIsLoading(true);
-  setLoadingMessage("Requesting Interview Session...");
+  const handleStartInterview = async () => {
+    if (heygenToken?.length > 0) {
+      console.log("Using existing HeyGen token");
+      setShouldStartAvatar(true);
+      return;
+    }
 
-  try {
+    console.log("Requesting Interview Session...");
+    setIsLoading(true);
+    setLoadingMessage("Requesting Interview Session...");
+
+    try {
+      const host = process.env.NEXT_PUBLIC_HOST;
+
+      if (!host) {
+        throw new Error("NEXT_PUBLIC_HOST is not configured");
+      }
+
+      console.log(`Using ${host} for the host.`);
+
+      const response = await fetch(
+        `${host}/api/heygen/session_token`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.detail ||
+          data?.message ||
+          response.statusText ||
+          "Failed to create HeyGen session"
+        );
+      }
+
+      setHeyGenToken(data);
+      setShouldStartAvatar(true);
+    } catch (error) {
+      console.error("Failed to start interview:", error);
+      toast.error("Unable to start the interview.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const waitForAnalysis = async (
+    jobId: string,
+    interviewId: string
+  ) => {
     const host = process.env.NEXT_PUBLIC_HOST;
 
     if (!host) {
       throw new Error("NEXT_PUBLIC_HOST is not configured");
     }
 
-    console.log(`Using ${host} for the host.`);
+    const timeout = 120000;
+    const start = Date.now();
 
-    const response = await fetch(
-      `${host}/api/heygen/session_token`,
-      {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
+    while (Date.now() - start < timeout) {
+      const response = await fetch(
+        `${host}/api/jobs/results/${jobId}`
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Job status request failed: ${response.status}`
+        );
       }
-    );
 
-    const data = await response.json();
+      const result = await response.json();
 
-    if (!response.ok) {
-      throw new Error(
-        data?.detail ||
-        data?.message ||
-        response.statusText ||
-        "Failed to create HeyGen session"
+      console.log("Job status:", result.status);
+
+      if (result.status === "completed") {
+        toast.success("Your interview analysis is complete!");
+
+        setTimeout(() => {
+          router.push(`/interviews/${interviewId}`);
+        }, 3000);
+
+        return;
+      }
+
+      if (result.status === "failed") {
+        toast.error("Your interview was saved, but analysis failed. You can view it in your history.");
+        await router.push(`/interviews/${interviewId}`);
+        return;
+      }
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, 3000)
       );
     }
 
-    setHeyGenToken(data);
-    setShouldStartAvatar(true);
-  } catch (error) {
-    console.error("Failed to start interview:", error);
-    toast.error("Unable to start the interview.");
-  } finally {
-    setIsLoading(false);
-  }
-};
-
-const waitForAnalysis = async (
-  jobId: string,
-  interviewId: string
-) => {
-  const host = process.env.NEXT_PUBLIC_HOST;
-
-  if (!host) {
-    throw new Error("NEXT_PUBLIC_HOST is not configured");
-  }
-
-  const timeout = 120000;
-  const start = Date.now();
-
-  while (Date.now() - start < timeout) {
-    const response = await fetch(
-      `${host}/api/jobs/results/${jobId}`
-    );
-
-    if (!response.ok) {
-      throw new Error(
-        `Job status request failed: ${response.status}`
-      );
-    }
-
-    const result = await response.json();
-
-    console.log("Job status:", result.status);
-
-    if (result.status === "success") {
-      toast.success("Your interview analysis is complete!");
-
-      setTimeout(() => {
-        router.push(`/interviews/${interviewId}`);
-      }, 3000);
-
-      return;
-    }
-
-    if (result.status === "failed") {
-      throw new Error("Analysis failed. Please try again.");
-    }
-
-    await new Promise((resolve) =>
-      setTimeout(resolve, 3000)
-    );
-  }
-
-  throw new Error("Analysis timed out. Please try again.");
-};
+    toast("Your interview was saved. Analysis is still running; check your history shortly.");
+    await router.push(`/interviews/${interviewId}`);
+  };
 
 
 
   /**
    * Handle creating a new interview document within the user's collection of interviews using the interview's data like its duration.
    */
-const handleStopInterview = async (
-  duration: string,
-  timeStarted: string
-) => {
-  if (!user) {
-    toast.error("You must be logged in.");
-    return;
-  }
-
-  const newInterview: IInterview = {
-    id: uuidv4(),
-    date: new Date().toLocaleDateString("en-US", {
-      month: "2-digit",
-      day: "2-digit",
-      year: "numeric",
-    }),
-    timeStarted,
-    duration,
-    feedback: undefined,
-    metrics: undefined,
-    transcript: fullTranscript,
-    sentiment: undefined,
-    url: undefined,
-  };
-
-  const req = {
-    userId: user.uid,
-    interview: newInterview,
-  };
-
-  setIsLoading(true);
-  setLoadingMessage("Submitting Interview Session...");
-
-  try {
-    const host = process.env.NEXT_PUBLIC_HOST;
-
-    if (!host) {
-      throw new Error("NEXT_PUBLIC_HOST is not configured");
+  const handleStopInterview = async (
+    duration: string,
+    timeStarted: string
+  ) => {
+    if (!user) {
+      toast.error("You must be logged in.");
+      return;
     }
 
-    console.log(`Using ${host} for the host.`);
-    console.log("Submitting Interview Session...");
+    const newInterview: IInterview = {
+      id: uuidv4(),
+      date: new Date().toLocaleDateString("en-US", {
+        month: "2-digit",
+        day: "2-digit",
+        year: "numeric",
+      }),
+      timeStarted,
+      duration,
+      feedback: undefined,
+      metrics: undefined,
+      transcript: fullTranscript,
+      sentiment: undefined,
+      url: undefined,
+    };
 
-    const response = await fetch(
-      `${host}/api/interview`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(req),
+    const req = {
+      userId: user.uid,
+      interview: newInterview,
+    };
+
+    setIsLoading(true);
+    setLoadingMessage("Submitting Interview Session...");
+
+    try {
+      const host = process.env.NEXT_PUBLIC_HOST;
+
+      if (!host) {
+        throw new Error("NEXT_PUBLIC_HOST is not configured");
       }
-    );
 
-    const data = await response.json();
+      console.log(`Using ${host} for the host.`);
+      console.log("Submitting Interview Session...");
 
-    if (!response.ok) {
-      throw new Error(
-        data?.detail ||
-        data?.message ||
-        `Error creating interview: ${response.status}`
+      const response = await fetch(
+        `${host}/api/interview`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(req),
+        }
       );
-    }
 
-    if (!data.job_id) {
-      throw new Error(
-        "Interview was created, but no analysis job ID was returned."
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.detail ||
+          data?.message ||
+          `Error creating interview: ${response.status}`
+        );
+      }
+
+      if (data.success === false) {
+        throw new Error("The interview could not be saved. Please try again.");
+      }
+
+      if (!data.job_id) {
+        toast.error("Your interview was saved, but analysis could not be started.");
+        await router.push(`/interviews/${newInterview.id}`);
+        return;
+      }
+
+      console.log(
+        "Analysis job started:",
+        data.job_id
       );
+
+      setLoadingMessage("Analyzing your interview...");
+
+      await waitForAnalysis(
+        data.job_id,
+        newInterview.id
+      );
+    } catch (error) {
+      console.error(
+        "Interview submission/analysis error:",
+        error
+      );
+
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong."
+      );
+    } finally {
+      setIsLoading(false);
     }
-
-    console.log(
-      "Analysis job started:",
-      data.job_id
-    );
-
-    setLoadingMessage("Analyzing your interview...");
-
-    await waitForAnalysis(
-      data.job_id,
-      newInterview.id
-    );
-  } catch (error) {
-    console.error(
-      "Interview submission/analysis error:",
-      error
-    );
-
-    toast.error(
-      error instanceof Error
-        ? error.message
-        : "Something went wrong."
-    );
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
 
   /**
      * Format time remaining into MM:SS
      * @param seconds Duration in seconds.
      */
   const formatTimer = (seconds: number) => {
-      const mins = Math.floor(seconds / 60).toString().padStart(2, "0");
-      const secs = (seconds % 60).toString().padStart(2, "0"); 
-      return `${mins}:${secs}`;
+    const mins = Math.floor(seconds / 60).toString().padStart(2, "0");
+    const secs = (seconds % 60).toString().padStart(2, "0");
+    return `${mins}:${secs}`;
   }
 
   /**
@@ -277,7 +284,7 @@ const handleStopInterview = async (
   const updateTranscript = (transcript: string, isFinal: boolean) => {
     // only add the final transcript for this turn to the overall transcript
     if (isFinal) {
-      setFullTranscript((prevTranscript) => `${prevTranscript}\n${transcript}\n`); 
+      setFullTranscript((prevTranscript) => `${prevTranscript}\n${transcript}\n`);
     }
   }
 
@@ -286,7 +293,7 @@ const handleStopInterview = async (
     // If a user isn't logged in, they are typically redirected away.
     <AuthGuard>
       <p>Transcript: {fullTranscript}</p>
-    {/* Button implemented to test notification feature
+      {/* Button implemented to test notification feature
       <button
   onClick={() =>
     toast.success(
@@ -304,20 +311,20 @@ const handleStopInterview = async (
             <Spinner message={loadingMessage} />
           )}
           <div style={{ display: isLoading ? "none" : "block", width: "100%" }}>
-              {/* Camera Error Notification */}
-              {cameraError && (
-                  <div className={styles.cameraErr}>
-                      <CircleAlert/>
-                      <p>{cameraError}</p> 
-                  </div>
-              )}
-              <p className={`${styles.timerDisplay} ${timeLeft < 20 ? styles.timerWarning : ""}`}>
-                Timer: {formatTimer(timeLeft)}
-              </p> {timeLeft > 0 && timeLeft <= 30 && (
-                <p className={styles.timerWarning}>
-                  Interview will end in {timeLeft} seconds
-                </p>
-              )}
+            {/* Camera Error Notification */}
+            {cameraError && (
+              <div className={styles.cameraErr}>
+                <CircleAlert />
+                <p>{cameraError}</p>
+              </div>
+            )}
+            <p className={`${styles.timerDisplay} ${timeLeft < 20 ? styles.timerWarning : ""}`}>
+              Timer: {formatTimer(timeLeft)}
+            </p> {timeLeft > 0 && timeLeft <= 30 && (
+              <p className={styles.timerWarning}>
+                Interview will end in {timeLeft} seconds
+              </p>
+            )}
 
             {/* Video Grid */}
             <div className={styles.videoContainer}>
@@ -333,7 +340,7 @@ const handleStopInterview = async (
                   onTranscriptChange={updateTranscript}
                 />
               </div>
-              
+
               {/* AI Interviewer */}
               {/* After receiving a sessionToken, this handles starting and stopping the session. */}
               <div className={styles.videoBox}>

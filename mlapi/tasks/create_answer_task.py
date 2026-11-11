@@ -70,7 +70,8 @@ def create_answer(
 
     # Generate competency feedback
     competency_feedback: OverallCompetencyFeedback = generate_competency_feedback(
-        None, audio_result, None
+        audio_result,
+        candidate_transcript=" ".join(segment.text for segment in audio_result.sentiment_analysis),
     )
 
 

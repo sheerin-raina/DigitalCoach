@@ -48,7 +48,7 @@ def get_job_status(job_id: str, redis_conn: Redis) -> JobResponse:
 
         logger.info(f"Job {job_id} completed successfully.")
         response.status = JobStatus.COMPLETED
-        response.result = job.result
+        response.result = job.result.model_dump(mode="json") if hasattr(job.result, "model_dump") else job.result
         return response
         
     # job still processing, return processing status

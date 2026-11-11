@@ -5,6 +5,7 @@ Handles setting the connection to Firebase services either emulators or producti
 import json
 import firebase_admin
 from firebase_admin import firestore, firestore_async, credentials, auth
+from google.cloud import firestore as google_firestore  # ADDED 10/20/26 - Marko
 import os
 from dotenv import load_dotenv
 from utils.logger_config import get_logger
@@ -56,11 +57,23 @@ def initialize_firebase():
 
 
 def get_firestore_client():
-    """
-    Initializes Firebase Admin SDK and then returns Firestore asynchronous client, i.e. connection to firestore database.
-    """
+    """Return an async Firestore client for local or production use."""
+    load_dotenv()
+
+    if os.getenv("FIRESTORE_EMULATOR_HOST"):
+        project_id = os.getenv("GCLOUD_PROJECT", "digitalcoach-31674")
+
+        return google_firestore.AsyncClient(project=project_id)
+
     initialize_firebase()
     return firestore_async.client()
+
+# def get_firestore_client():
+#     """
+#     Initializes Firebase Admin SDK and then returns Firestore asynchronous client, i.e. connection to firestore database.
+#     """
+#     initialize_firebase()
+#     return firestore_async.client()
 
 
 def get_auth_client():

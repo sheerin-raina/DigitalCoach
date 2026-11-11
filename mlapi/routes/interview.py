@@ -26,11 +26,11 @@ from services.orchestrator import start_interview_analysis
     description="Creates interview document populated with initial data from user's interview before it gets analyzed.",
 )
 async def create_interview(request: CreateInterviewRequest):
-    db = get_firestore_client()
     logger.info(
         f"Attempting to create new interview document for user={request.userId}..."
     )
     try:
+        db = get_firestore_client()
         # convert interview pydantic object into a dictionary
         interview = request.interview.model_dump()
 
@@ -54,12 +54,16 @@ async def create_interview(request: CreateInterviewRequest):
         analysisRequest = AnalyzeInterviewRequest(
             user_id=request.userId, interview_id=interview["id"]
         )
-        job_id = start_interview_analysis(analysisRequest)
+        try:
+            job_id = start_interview_analysis(analysisRequest)
+        except Exception:
+            logger.exception("Interview saved, but analysis could not be queued")
+            return CreateInterviewResponse(success=True)
 
         return CreateInterviewResponse(job_id=job_id, success=True)
     except Exception as e:
-        logger.info(f"Failed to create interview: {e}")
-        return CreateInterviewResponse(success=False)
+        logger.exception("Failed to create interview")
+        raise HTTPException(status_code=500, detail="Unable to save interview.") from e
 
 
 # GET /api/interview
@@ -69,21 +73,21 @@ async def create_interview(request: CreateInterviewRequest):
     summary="Get interview document given user and interview id.",
     description="Retrieves an interview document with a given id from a user with a given id.",
 )
-async def get_interview(request: GetInterviewRequest):
+async def get_interview(userId: str, interviewId: str):
     db = get_firestore_client()
     logger.info(
-        f"Attempting to retrieve interview document with id {request.interviewId} from user={request.userId}..."
+        f"Attempting to retrieve interview document with id {interviewId} from user={userId}..."
     )
     try:
         interview = await (
             db.collection("users")
-            .document(request.userId)
+            .document(userId)
             .collection("interviews")
-            .document(request.interviewId)
+            .document(interviewId)
             .get()
         )
         logger.info("Retrieved interview!")
-        return GetInterviewResponse(interview=interview)
+        return GetInterviewResponse(interview=interview.to_dict() if interview.exists else None)
     except Exception as e:
         logger.info(f"Failed to retrieve interview: {e}")
         return GetInterviewResponse(interview=None)
